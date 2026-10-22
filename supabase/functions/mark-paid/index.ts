@@ -1,0 +1,10 @@
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { corsHeaders } from "../_shared/cors.ts";
+const json=(body:unknown,status=200)=>new Response(JSON.stringify(body),{status,headers:{...corsHeaders,"Content-Type":"application/json"}});
+Deno.serve(async req=>{if(req.method==="OPTIONS")return new Response("ok",{headers:corsHeaders});if(req.method!=="POST")return json({error:"Method not allowed"},405);
+try{const expected=Deno.env.get("ORDER_ADMIN_SECRET");const auth=req.headers.get("Authorization")||"";if(!expected||auth!=="Bearer "+expected)return json({error:"Unauthorized"},401);
+const {order_id}=await req.json();if(typeof order_id!=="string")return json({error:"Invalid order id"},400);
+const supabase=createClient(Deno.env.get("SUPABASE_URL")!,Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+const {data,error}=await supabase.from("slicky_orders").update({status:"paid",paid_at:new Date().toISOString()}).eq("id",order_id).eq("status","pending").select("id,order_number,status,paid_at").single();
+if(error||!data)return json({error:"Pending order not found"},404);return json(data);
+}catch(e){console.error(e);return json({error:"Could not update order"},500)}});
